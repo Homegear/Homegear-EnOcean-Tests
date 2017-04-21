@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-	std::unique_ptr<BaseLib::Obj> bl(new BaseLib::Obj(std::string(""), nullptr, false));
+	std::unique_ptr<BaseLib::SharedObjects> bl(new BaseLib::SharedObjects(std::string(""), nullptr, false));
 	BaseLib::SerialReaderWriter serial(bl.get(), "/dev/ttyUSB0", 57600, 0, true, -1);
 	serial.openDevice(false, false, false);
 

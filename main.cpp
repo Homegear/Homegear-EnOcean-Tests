@@ -147,7 +147,7 @@ bool getBooleanValue(uint64_t peerId, int32_t channel, std::string variable)
 		std::cerr << "Could not get value of variable \"" + variable + "\" for peer \"" + std::to_string(peerId) + "\" on channel \"" + std::to_string(channel) + "\". HomegearException thrown: " << output << std::endl;
 		exit(1);
 	}
-	return output == "true";
+	return output == "true" || output == "1";
 }
 
 double getDoubleValue(uint64_t peerId, int32_t channel, std::string variable)
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
 	_enoceanInterface = std::string(argv[2]);
 	std::cout << "EnOcean interface set to " << _enoceanInterface << std::endl;
 
-	std::unique_ptr<BaseLib::Obj> bl(new BaseLib::Obj(std::string(""), nullptr, false));
+	std::unique_ptr<BaseLib::SharedObjects> bl(new BaseLib::SharedObjects(std::string(""), nullptr, false));
 	try
 	{
 		_serial.reset(new BaseLib::SerialReaderWriter(bl.get(), serialDevice, 57600, 0, true, -1));
@@ -842,6 +842,52 @@ void testA50605()
 	deleteDevice(peerId);
 }
 
+void testA50701()
+{
+	std::cout << std::endl << "Testing EEP A50701..." << std::endl;
+	uint64_t peerId = createDevice("A50701");
+
+	// {{{ LRN bit
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, 0, 0, 0, 0x08, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, 0, 0, 0, 0x08, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, 0, 0, 0, 0x08, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, (char)(uint8_t)0xFF, 0, (char)(uint8_t)0xFF, 0, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, (char)(uint8_t)0xFF, 0, (char)(uint8_t)0xFF, 0, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, (char)(uint8_t)0xFF, 0, (char)(uint8_t)0xFF, 0, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		if(getDoubleValue(peerId, 1, "SUPPLY_VOLTAGE") != 0.0 || getBooleanValue(peerId, 1, "MOTION") != false)
+		{
+			deleteDevice(peerId);
+			std::cerr << "Wrong value returned (1)" << std::endl;
+			exit(1);
+		}
+	// }}}
+
+	int32_t retries = 5;
+	for(int32_t i = 250; i >= 0; i--)
+	{
+		if(retries != 5) i++;
+		sendPacket(std::vector<char>{ 0x55, 0x00, 0x0A, 0x07, 0x01, 0x00, (char)(uint8_t)0xA5, (char)(uint8_t)i, 0, (char)(uint8_t)i, 0x09, _byteAddress[0], _byteAddress[1], _byteAddress[2], _byteAddress[3], 0x00, 0x01, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, (char)(uint8_t)0xFF, 0x00, 0x00, 0x00 });
+		int32_t value1 = std::lround(getDoubleValue(peerId, 1, "SUPPLY_VOLTAGE") * 50.0);
+		bool value2 = getBooleanValue(peerId, 1, "MOTION");
+		if(value1 != i || (i <= 127 && value2 != false) || (i >= 128 && value2 != true))
+		{
+			retries--;
+			if(retries > 0)
+			{
+				std::cout << 'r';
+				continue;
+			}
+			std::cerr << "Wrong values returned for binary value " << i << ": " << value1 << ' ' << value2 << std::endl;
+			deleteDevice(peerId);
+			exit(1);
+		}
+		retries = 5;
+		std::cout << (i > 0 ? "." : ".; done.\n") << std::flush;
+	}
+
+	deleteDevice(peerId);
+}
+
 void testA53801()
 {
 	std::cout << std::endl << "Testing EEP A53801... " << std::endl;
@@ -998,10 +1044,11 @@ void testA5()
 	testA50403();
 	testA50501();
 	testA50601();
-	testA50602();*/
+	testA50602();
 	testA50603();
 	testA50604();
-	testA50605();
+	testA50605();*/
+	testA50701();
 	/*testA53801();
 	testA53802();*/
 }
